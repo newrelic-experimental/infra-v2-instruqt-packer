@@ -1,2 +1,2 @@
 sudo apt update
-sudo apt install --assume-yes python3
+sudo apt install --assume-yes python3-pip
