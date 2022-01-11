@@ -7,21 +7,21 @@ packer {
   }
 }
 
-source "googlecompute" "npm-instruqt" {
-  project_id = "nrge-316315"
+source "googlecompute" "infra2-instruqt" {
+  project_id = "nr-devadv-labs"
   source_image_family = "ubuntu-2004-lts"
   ssh_username = "packer"
   zone = "us-central1-a"
-  image_name = "network-performance-monitoring-instruqt"
+  image_name = "infra-v2-instruqt"
 }
 
 build {
-  sources = ["sources.googlecompute.npm-instruqt"]
+  sources = ["sources.googlecompute.infra2-instruqt"]
 
   provisioner "shell" {
     scripts = [
         "./scripts/install-dependencies.sh",
-        "./scripts/setup-docker.sh",
+        "./scripts/set-up-service.sh",
     ]
   }
 }
