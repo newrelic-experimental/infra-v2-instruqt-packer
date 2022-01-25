@@ -1,0 +1,183 @@
+
+services:
+  mongodb:
+    build:
+      context: mongo
+    image: $DOCKERHUB_USER/rs-mongodb:$TAG
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  mysql:
+    build:
+      context: mysql
+    image: $DOCKERHUB_USER/rs-mysql:$TAG
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  rabbitmq:
+    image: rabbitmq:3.7-management-alpine
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  redis:
+    image: redis:4.0.6
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  catalogue:
+    build:
+      context: catalogue
+    image: $DOCKERHUB_USER/rs-catalogue:$TAG
+    depends_on:
+      - mongodb
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - MONGO_HOST=mongodb
+      - NEW_RELIC_APP_NAME=geek-shop-catalogue-service
+      - NEW_RELIC_LICENSE_KEY=$NEW_RELIC_LICENSE_KEY
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+      - NEW_RELIC_LABELS=clusterName:$CLUSTER_NAME;service:catalogue
+  cart:
+    build:
+      context: cart
+    image: $DOCKERHUB_USER/rs-cart:$TAG
+    depends_on:
+      - redis
+      - catalogue
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - REDIS_HOST=redis
+      - CATALOGUE_HOST=catalogue
+      - NEW_RELIC_APP_NAME=geek-shop-cart-service
+      - NEW_RELIC_LICENSE_KEY=$NEW_RELIC_LICENSE_KEY
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+      - NEW_RELIC_LABELS=clusterName:$CLUSTER_NAME;service:cart
+  user:
+    build:
+      context: user
+    image: $DOCKERHUB_USER/rs-user:$TAG
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - MONGO_HOST=mongodb
+      - REDIS_HOST=redis
+      - NEW_RELIC_APP_NAME=geek-shop-user-service
+      - NEW_RELIC_LICENSE_KEY=$NEW_RELIC_LICENSE_KEY
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+      - NEW_RELIC_LABELS=clusterName:$CLUSTER_NAME;service:user
+  shipping:
+    build:
+      context: shipping
+    image: $DOCKERHUB_USER/rs-shipping:$TAG
+    depends_on:
+      - mysql
+      - cart
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - MYSQL_HOST=mysql
+      - CART_HOST=cart
+      - NEW_RELIC_APP_NAME=geek-shop-shipping-service
+      - NEW_RELIC_LICENSE_KEY=$NEW_RELIC_LICENSE_KEY
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+      - NEW_RELIC_LABELS=clusterName:$CLUSTER_NAME;service:shipping
+  payment:
+    build:
+      context: payment
+    image: $DOCKERHUB_USER/rs-payment:$TAG
+    depends_on:
+      - rabbitmq
+      - cart
+      - user
+    networks:
+      - geek-shop
+    environment:
+      - AMQP_HOST=rabbitmq
+      - CART_HOST=cart
+      - USER_HOST=user
+      - NEW_RELIC_APP_NAME=geek-shop-payment-service
+      - NEW_RELIC_LICENSE_KEY=$NEW_RELIC_LICENSE_KEY
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+      - NEW_RELIC_LABELS=clusterName:$CLUSTER_NAME;service:payment
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  web:
+    build:
+      context: web
+    image: $DOCKERHUB_USER/rs-web:$TAG
+    depends_on:
+      - catalogue
+      - cart
+      - user
+      - shipping
+      - payment
+    ports:
+      - "8888:8080"
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - CATALOGUE_HOST=catalogue
+      - CART_HOST=cart
+      - USER_HOST=user
+      - SHIPPING_HOST=shipping
+      - PAYMENT_HOST=payment
+  loader:
+    build:
+      context: loader
+    image: $DOCKERHUB_USER/rs-loader:$TAG
+    depends_on:
+      - web
+    networks:
+      - geek-shop
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - HOST=$PUBLIC_URL
+      - CLIENTS=1
+      - ERROR=0
+networks:
+  geek-shop:
+version: '3'
